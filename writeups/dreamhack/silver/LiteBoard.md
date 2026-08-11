@@ -28,11 +28,10 @@ exploitable via a UNION-based attack. The goal is to extract the flag by enumera
 
 3. Trial and error
 
-   - I confitmed the SQL injection vulnerability but I got stuck at two points during exploitation. First, I couldn't directly verify the database type - instead, I inferred it was SQLite based on the challenge name "LiteBoard".
+   - A single quote caused a 500 error, indicating that user input is being interpreted as SQL syntax without escaping - a driect sign of SQL injection. 
+   I confirmed the SQL injection vulnerability but I got stuck at two points during exploitation. First, I couldn't directly verify the database type - instead, I inferred it was SQLite based on the challenge name "LiteBoard".
 
-   Ideally, DBMS fingerprinting: injecting `sqlite_version()` or DB-specific syntax via UNION SELECT to confirm the backend. Second, I was unware that SQLite's metadata table is `sqlite_master` rather than `information_schema`,
-
-   so i look it up before proceeding.
+   Ideally, DBMS fingerprinting: injecting `sqlite_version()` or DB-specific syntax via UNION SELECT to confirm the backend. Second, I was unware that SQLite's metadata table is `sqlite_master` rather than `information_schema`, so i look it up before proceeding.
 
 ## Final Exploit
 
@@ -118,8 +117,10 @@ cursor.execute(query, ("%" + keyword + "%",))
 
 ## Mitigation
 
-- (defensive side too, not just attacker POV — e.g. scheme whitelist, DNS pinning)
+- The core issue is user input being directly interpreted as SQL without sanitization. As mentioned above Prepared Statement but defense-in-depth suggests additional layers:
+1. INput Validation - Maintain a blacklist of SQL-specific characters and keywords (e.g `'`,`--`,`UNION`). Reject or escape any input containing them before it reaches the query.
+2. Suppress Error Messages - Avoid exposing raw 500 errors or DB-specific messages to the client. In this challenge, a single `'` confirmed SQL inejection via a 500 response. Generic error pages prevent attackers from fingerprinting the backend or confirming injection success.
 
 ## Flag
 
-`DH{...}`
+`bisc2024{7H1s_1s_5qL1t3_b04rd}`
