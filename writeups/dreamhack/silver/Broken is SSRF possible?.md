@@ -47,39 +47,19 @@ the validation logic sees `www.google.com`, while the `requests` library corrent
 - I reinforced my understading of the `userinfo@host` SSRF bypass technique, which I had previously used in a different challenge (`curling`). What made this instance different was aht a naive `userinfo@host` payload alone was insufficient - the validation logic here additionally split the extraced string on `:`,
 assuming it always separates `host` from `port`. This meant the payload had to explicitly include a colon before the `@`(`userinfo:port@host`) to satisfy both the colon-split logic and the suerinfo-separator behavior of the acutal URL parser simultaneously.
   The `userinfo@host` URL structure and how naice host-validation logic an be tricked into exdtracting the wrong component
-    -> see [conecpts/ssrf.md](../../../concepts/ssrf.md#Host-Trick)
+    -> see [conecpts/ssrf.md](../../../concepts/ssrf.md#userinfo-host-trick)
    
 ## Mitigation
-- 1. Blacklist filter limitation.
-      THe `includes('admin')` blacklist approach is inherently fragile - if an attacker finds any bypass techique (e.g. `\t`,`\n`, URL encoding), the entire filter fails. A whitelist approach is recommended instead:
-```javascript
-// Vulnerable: blacklist
-if (msg.includes('admin')) return error;
+- User a standards-compliant URL parser instead of custom regex
+Hand-written regex and manual string sokitting (`split(":")`) are error-prone becuase they rarely account for every valid - and every attakcer-abusable - component of the URL spec (userinfo, IPv6 literals, encoded characters,etc.).
+Python's built-in `urlib.parse.urlparse()` correctly separates `scheme`,`userinfo`,`hostname`,`port`,`path`, and `query` according to RFC 3986, closing the gap this challenge exploited.
+```python
+# Vulnerable
+host = re.search(r'(?<=//)[^/]+', url).group()
 
-// Safer: whitelist (only allow expected characters)
-if (!/^[a-zA-Z0-9 ]+$/.test(msg)) return error;
-```
-
-- 2. URL-encode user input before inserting into URL
-      User input should be encoded with `encodeURIComponent()` before being interpolated into a URL. This converts sepcial characters like `&` and `=` into `%26` and `%3D`, preventing paramter injection:
-```javascript
-// Vulnerable
-axios.get(`http://localhost:3000/api?msg=${msg}&admin=0`);
-
-// Safe
-axios.get(`http://localhost:3000/api?msg=${encodeURIComponent(msg)}&admin=0`);
-```
-- 3. Strict type check vefore `Number()` conversion
-      Before calling `Number()`, validate that the innput a single string, not an array:
-```javascript
-// Vulnerable
-const isAdmin = Number(req.query.admin);
-if (isAdmin !== 0) return FLAG;
-
-// Safe
-if (typeof req.query.admin !== 'string') return res.send('No');
-const isAdmin = Number(req.query.admin);
-if (isAdmin !== 0) return FLAG;
+# Safe
+from urllib.parse import urlparse
+host = urlparse(url).hostname  # correctly ignores userinfo, handles edge cases
 ```
 ## Flag
-`null{D0_u_kn0w_expre3S_qu3ry_1i2it?}`
+`DH{please_share_your_idea_okay_good}`
