@@ -1,4 +1,4 @@
-# [DreamHack Silver] Test site
+# [DreamHack Silver] Dream Gallery
 
 ## Challenge Info
 - Platform: DreamHack
