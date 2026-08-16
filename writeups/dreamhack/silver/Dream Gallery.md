@@ -66,7 +66,7 @@ round - this gap is what made the doubble-URL-encoding bypass possible.
 - → [concepts/ssrf.md#double-url-encoding-filter-bypass](../../../concepts/ssrf.md#double-url-encoding-filter-bypass)
 
 ## Mitigation
-- (defensive side too, not just attacker POV — e.g. scheme whitelist, DNS pinning)
+
 
 ## Flag
-`DH{...}`
+`DH{b2037a026b40cc98804e91b5a2a07f54}`
