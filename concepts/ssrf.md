@@ -31,10 +31,66 @@ at the consumption point.
 
 ### Known decoding counts (accumulated from past challenges)
 - Flask `request.args.get()` / `request.form.get()`: 1 automatic decode
-- Python `urllib.request.urlopen()` on a `file://` URL: 1 additional internal decode
-- (add more here as discovered in future challenges)
 
-### Seen in
-- Dream Gallery (Dreamhack) — bypassing `"flag" in url` filter via urlopen's internal decode
-- admin only (Dreamhack) — possible variant via form-data decode vs raw-body filter check
-- old-26 (Webhacking.kr) — PHP auto-decode + explicit urldecode() double-decode
+## scheme-colon-slash-count-leniency
+
+Some URL parsers handle special schemes such as `http` and `https` leniently,
+allowing different numbers of slashes after the scheme colon:
+
+```text
+http://host/path
+http:/host/path
+http:host/path
+```
+## url-fragment-invisible-to-server
+
+URL fragments are the part after `#`:
+
+```text
+https://example.com/path?query=value#fragment
+```
+Fragments are handled by the client are not included in the http request sent to the server.
+This can cause an SSRF filter bypass when a filter scans the raw URL string instead of parsing it. The filter may inspect content inside the fragment even though that content will never be sent to the server.
+For example:
+```text
+https://example.com/#http://127.0.0.1
+```
+A naive string-based filter may detect http://127.0.0.1, while the actual request only targets https://example.com/.
+
+
+## fetch-rejects-userinfo-urls
+
+URLs can contain userinfo before the hostname:
+
+```text
+https://username:password@example.com/path
+```
+Some HTTP clients accept URLs containing userinfo and use the hostname after
+@ as the actual destination. This can create a discrepancy between what a
+naive SSRF filter sees and where the request is actually sent.
+
+However, JavaScript's standard fetch() API rejects URLs containing
+userinfo/credentials.
+
+Therefore, the applicability of userinfo-based SSRF bypasses depends on the
+HTTP client used by the application. A bypass that works with one client may
+not work with another.
+
+Key point: Always consider how the actual HTTP client parses and handles the URL, rather than assuming all clients behave the same way.
+
+## octal-ip-cve-2025-59436
+
+IPv4 addresses can have non-standard representations. For example, some URL
+parsers interpret `017700000001` as the loopback address `127.0.0.1`.
+
+CVE-2025-59436 affects versions of the npm `ip` package up to 2.0.1.
+Its `isPublic()` and `isPrivate()` functions can incorrectly classify
+certain non-standard IPv4 representations, such as `017700000001`, as
+public addresses.
+
+This can lead to an SSRF bypass when an application relies on the library
+to block requests to private or loopback addresses.
+
+The important lesson is that SSRF protection also depends on the correctness
+of its dependencies. Always keep security-sensitive libraries up to date and
+check their known vulnerabilities.
