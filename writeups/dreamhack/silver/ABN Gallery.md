@@ -29,21 +29,29 @@ into fetch().
 I also confirmed that /admin only returns the file specified by the log parameter when the request originates from a local (private) IP.
 Combining these two facts, I hypothesized that if I could deceive only the filtering logic of /fetch while making the actual request target the server itself (localhost), I could reach the internal-only /admin route through /fetch.
 3. Trial and error
-   - (dead ends you hit, approaches that failed — this is the part that actually shows your thought process)
+   - I tried to make the acual request target 127.0.0.1 while deceiving extractHost, in several different ways.
+   1. userinfo@host(no colon) : http://www.google.com@127.0.0.1/... - extractHost doesn't recognize '@', so it returned the whole string `www.google.com@127.0.0.1` as-is. This isn't a valid host format, so it failed at hostIsPublic().
+   2. userinfo@host (with colon): `http://www.google.com:1@127.0.0.1/...` - adding a colon made extractHost correctlyreturn `www.google.com`, passing the check. However, at the actual reqeust stage, JavaScript's fetch() rejects any URL containing credentials (userinfo, i.e. an `@`). resulting in 500 error.
+   3. Backslash: `www.google.com\@127.0.0.1` - Under the WHATWG URL standard, special scheme like http/https treat `\` the same way as `/`. As a result, new URL() also stopped parsing the host at the blackslash, just like extractHost did - both parsers agreed, so the mismatch we needed never occurred.
+   4. Question mark: `www.google.com?@127.0.0.1` - new URL() corretly interprets the host as `www.google.com` (since `?` starts the query string), but extractHost has no concpey of `?` as a terminator and returned the whole string `www.google.com?@127.0.0.1` - again not a valid host format, so it failed at hostIsPublic() as well.
+   5. CVE-2025-59436 (octal IP notation): A hint in the official QnA pointed to this CVE. It's a bug in the npm 'ip' package (<=2.0.1) where an octal-notation IP string like "017700000001" (the octal representation of 127.0.0.1) is incorrectly classified as a public IP by isPublic(). extractHost passed this string through untouched, and hostIsPublic() returned true due to the bug, while new URL() correctly normalized the same string to "127.0.0.1" per the WHATWG URL standard's IP parsing rules — giving us exactly the mismatch we needed, but through a library bug rather than a parser-logic gap.
+   Initially, omitting the port caused a "fetch failed" error, since a URL without an explicit port defaults to port 80 for the http scheme. Checking the Dockerfile confirmed the app was configured with `ENV PORT 3000`, meaning nothing was listening on port 80 inside the container. Explicitly specifying port 3000 resolved the issue, allowing the request to successfully reach the app's own /admin route and retrieve the flag.
+
 
 ## Final Exploit
-\```
-(the actual payload / request used)
-\```
-- One-line explanation of why this payload worked
+```
+/fetch?url=http://017700000001:3000/admin%3Flog=../../flag
+```
+- The octal-notation IP `017700000001` is passed through extractHost unmodified and misclassified as a public IP by hostIsPublic() due to CVE-2025-59436, while new URL() correctly normalizes the same string to 127.0.0.1 - causing the actual fetch to target the server itself on its internal port (3000, per the Dockerfile's ENV PORT 3000) at `/amin?log=../../flag`, where path traversal reads the flag file located at the container's filesystem root.
 
 ## Root Cause
-- What the underlying flaw is (e.g. the URL scheme validator only checks for `https`, so an omitted scheme bypasses it)
-- Related CWE: (e.g. CWE-918 SSRF)
+- Validation relied on extractHost, while the actual reqeust relied on new URL() - so the value being checked and the value being used were never garuanted to match.
+These attempts did not achieve an actual bypass alone. Finally, I had to exploit a bug in the npm ip package which hostisPublic() relies on internally. It is not a flaw in the application code, but a flaw in the third-party library the developer had trusted and relied on.
+- Related CWE: CVE-2025-59436
 
 ## What I Learned
-- (any new concept/technique from this challenge, link to the concepts file for detail)
-- e.g. curl defaults to `http` when no scheme is given → see [concepts/ssrf.md](../../../concepts/ssrf.md#filter-bypass-cheatsheet)
+- Special schemes (http.https) tolerate any slash count after the colon (`http:`, `http:/`, `http://` all parse identically) 
+-> [../../../concepts/ssrf.md#scheme-colon-slash-count-leniency](http://github.comkkakk
 
 ## Mitigation
 - (defensive side too, not just attacker POV — e.g. scheme whitelist, DNS pinning)
