@@ -50,11 +50,22 @@ These attempts did not achieve an actual bypass alone. Finally, I had to exploit
 - Related CWE: CVE-2025-59436
 
 ## What I Learned
-- Special schemes (http.https) tolerate any slash count after the colon (`http:`, `http:/`, `http://` all parse identically) 
--> [../../../concepts/ssrf.md#scheme-colon-slash-count-leniency](http://github.comkkakk
-
+- Special schemes (http/https) tolerate any slash count after the colon 
+  (`http:`, `http:/`, `http://` all parse identically) — see 
+  [concepts/ssrf.md](../../../concepts/ssrf.md#scheme-colon-slash-count-leniency)
+- URL fragments (`#...`) are never sent to the server, but naive string-matching 
+  filters can still be fooled by text placed after a `#` — see 
+  [concepts/ssrf.md](../../../concepts/ssrf.md#url-fragment-invisible-to-server)
+- JavaScript's fetch() refuses any URL containing userinfo (`@`), unlike Python's 
+  requests/curl — see 
+  [concepts/ssrf.md](../../../concepts/ssrf.md#fetch-rejects-userinfo-urls)
+- Octal-notation IPs (e.g. 017700000001) can bypass IP-classification libraries 
+  with incomplete normalization (CVE-2025-59436) — see 
+  [concepts/ssrf.md](../../../concepts/ssrf.md#octal-ip-cve-2025-59436)
 ## Mitigation
-- (defensive side too, not just attacker POV — e.g. scheme whitelist, DNS pinning)
+- Use the same parser for URL validation and the actual request.
+You should parse the URL with `new URL()` and reuse the parsed result for both validation and the actual request.
+This prevents the validated value and the value used for the actual request from being different.
 
 ## Flag
-`DH{...}`
+`DH{7hANks_f0r_vI5i71nG_7he_9A11ery:J6HfiXBcsYW5GZa/mTbqaw==}`
